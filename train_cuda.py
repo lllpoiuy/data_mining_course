@@ -7,12 +7,14 @@ from tqdm import tqdm
 import numpy as np
 from scipy.ndimage import gaussian_filter1d
 
-dataloaders = load_FY_Dataset(csv_files=["datasets/test.csv"], batch_size=32)
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-model = MaskedLinear(seq_len=12, input_dim=3, output_dim=1, hidden_dim=5)
-# criterion = nn.MSELoss()
-criterion = nn.L1Loss()
-optimizer = optim.Adam(model.parameters(), lr=0.0003)
+dataloaders = load_FY_Dataset(csv_files=["datasets/test.csv"], batch_size=16)
+
+model = MaskedLinear(seq_len=12, input_dim=3, output_dim=1, hidden_dim=4).to(device)
+criterion = nn.MSELoss().to(device)
+# criterion = nn.L1Loss().to(device)
+optimizer = optim.Adam(model.parameters(), lr=0.001)
 
 curve_1 = []
 curve_2 = []
@@ -27,10 +29,11 @@ def eval():
     with torch.no_grad():
         for batch in dataloaders['val']:
             inputs, targets = batch
+            inputs, targets = inputs.to(device), targets.to(device)
             outputs = model(inputs)
             outputs = outputs.reshape(-1, 12)
-            sum_outputs += outputs.sum(dim=0)
-            sum_targets += targets.sum(dim=0)
+            sum_outputs += outputs.sum(dim=0).cpu()
+            sum_targets += targets.sum(dim=0).cpu()
             loss = criterion(outputs, targets)
             total_loss += loss.item()
     avg_loss = total_loss / len(dataloaders['val'])
@@ -46,6 +49,7 @@ def train():
     total_loss = 0.0
     for batch in dataloaders['train']:
         inputs, targets = batch
+        inputs, targets = inputs.to(device), targets.to(device)
         optimizer.zero_grad()
         outputs = model(inputs)
         outputs = outputs.reshape(-1, 12)
@@ -57,7 +61,7 @@ def train():
     # print(f"Training Loss: {avg_loss:.4f}")
 
 if __name__ == "__main__":
-    num_epochs = 3000
+    num_epochs = 1500
     for epoch in tqdm(range(num_epochs)):
         train()
         eval()

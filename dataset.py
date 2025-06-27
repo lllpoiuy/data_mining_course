@@ -44,18 +44,21 @@ class FY_Dataset(Dataset):
         sample2 = self.data.iloc[idx].values[19:31].astype('float32')
         sample3 = sample2.cumsum()
 
-        # Alternate elements from sample1 and sample2
-        alternated = [val for pair in zip(sample1, sample2, sample3) for val in pair]
-        sample = torch.tensor(alternated, dtype=torch.float32)
+        # Alternate elements from samples
+        # alternated = [val for pair in zip(sample1, sample2, sample3) for val in pair]
+        # sample = torch.tensor(alternated, dtype=torch.float32)
 
         # concat sample1, sample2, sample3 to [batch_size, 12, 3]
-        # sample = torch.stack([torch.tensor(sample1), torch.tensor(sample2), torch.tensor(sample3)], dim=1)
-        return sample
+        sample = torch.stack([torch.tensor(sample1), torch.tensor(sample2), torch.tensor(sample3)], dim=1)
+
+        target = torch.tensor(sample3[-1], dtype=torch.float32).repeat(12)
+
+        return sample, target
 
 def load_FY_Dataset(
     csv_files: List[str],
     batch_size: int = 32,
-    train_ratio: float = 0.8
+    train_ratio: float = 0.7
 ) -> Dict[str, DataLoader]:
     """
     Load csv FY files into PyTorch DataLoaders

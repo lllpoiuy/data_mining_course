@@ -5,3 +5,5 @@ torchvision
 torchaudio
 pandas
 openpyxl
+tqdm
+pytest

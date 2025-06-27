@@ -1,4 +1,4 @@
-Last Seen Month,Region,Site,Business Category,Project No.,Capital Classification Code,Firm,Jul,Aug,Sep,Oct,Nov,Dec,Jan,Feb,Mar,Apr,May,Jun,J,A,S,O,N,D,J,F,M,A,M,J
+0LastSeenMonth, 1Region, 2Site, 3BusinessCategory, 4ProjectNo, 5CapitalClassificationCode, 6Firm, 7Jul, 8Aug, 9Sep, 10Oct, 11Nov, 12Dec,13Jan, 14Feb, 15Mar, 16Apr, 17May, 18Jun, 19J, 20A, 21S, 22O, 23N, 24D, 25J, 26F, 27M, 28A, 29M, 30J
 ,Market E,APAC Dummy,Category F,FB.50913,03,300,300,300,300,300,300,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
 ,Market E,APAC Dummy,Category C,FB.51093,03,190,190,190,240,240,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
 ,Market E,APAC Dummy,Category C,FB.51094,03,280,280,280,280,280,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
