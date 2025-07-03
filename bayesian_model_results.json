@@ -1,0 +1,29 @@
+{
+    "config": {
+        "data_dir": "datasets",
+        "batch_size": 32,
+        "epochs": 100,
+        "lr": 0.0003,
+        "weight_decay": 1e-06,
+        "hidden_dim": 64,
+        "dropout": 0.1,
+        "kl_annealing": 50,
+        "scheduler": "cosine",
+        "early_stopping": false,
+        "patience": 10,
+        "clip_value": 1.0,
+        "train_ratio": 0.8,
+        "kl_weight": 0.01,
+        "device": "cpu",
+        "save_dir": "./"
+    },
+    "metrics": {
+        "mse": 4674.904296875,
+        "rmse": 68.3732681274414,
+        "mae": 15.45212459564209,
+        "coverage": 0.0,
+        "avg_uncertainty": 0.0
+    },
+    "best_epoch": 293,
+    "training_time": 394.7067286968231
+}

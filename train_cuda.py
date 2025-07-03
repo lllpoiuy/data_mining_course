@@ -3,6 +3,7 @@ import torch
 from model import MaskedLinear
 import torch.nn as nn
 import torch.optim as optim
+import matplotlib.pyplot as plt
 from tqdm import tqdm
 import numpy as np
 from scipy.ndimage import gaussian_filter1d
@@ -76,7 +77,6 @@ if __name__ == "__main__":
     curve_4 = gaussian_filter1d(np.array(curve_4), sigma=3).tolist()
 
 
-    import matplotlib.pyplot as plt
 
     plt.figure(figsize=(10, 6))
     plt.plot(curve_1, label='Validation Loss')
