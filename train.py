@@ -1,107 +1,117 @@
-from dataset import load_FY_Dataset
+import argparse
+from utils.dataset import train_get_dataloader
+from models.MLP import MLP
 import torch
-from model import MaskedLinear
-import torch.nn as nn
-import torch.optim as optim
-from tqdm import tqdm
 import numpy as np
 from scipy.ndimage import gaussian_filter1d
+import matplotlib.pyplot as plt
+import random
 
-dataloaders = load_FY_Dataset(csv_files=["datasets/test.csv"], batch_size=32)
+def train_single_run(path, num, seed):
+    # Set random seeds for reproducibility
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed(seed)
+    np.random.seed(seed)
+    random.seed(seed)
+    
+    model_name = f"MLP_{num}_seed_{seed}"
+    print(f"Training model: {model_name} with data from {path}")
 
-model = MaskedLinear(seq_len=12, input_dim=3, output_dim=1, hidden_dim=5)
-# criterion = nn.MSELoss()
-criterion = nn.L1Loss()
-optimizer = optim.Adam(model.parameters(), lr=0.0003)
+    train_dataset, eval_dataset, shape = train_get_dataloader(path, num, use_region=True, use_site=True, use_category=True, batch_size=128)
 
-curve_1 = []
-curve_2 = []
-curve_3 = []
-curve_4 = []
+    model = MLP(input_dim=shape, hidden_dim=15, output_dim=1)
+    criterion = torch.nn.L1Loss()
+    optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
 
-def eval():
-    model.eval()
-    total_loss = 0.0
-    sum_outputs = torch.zeros(12)
-    sum_targets = torch.zeros(12)
-    with torch.no_grad():
-        for batch in dataloaders['val']:
+    error_rates = []
+
+    def validate():
+        outputs_sum = 0
+        targets_sum = 0
+        for batch in eval_dataset:
             inputs, targets = batch
             outputs = model(inputs)
-            outputs = outputs.reshape(-1, 12)
-            sum_outputs += outputs.sum(dim=0)
-            sum_targets += targets.sum(dim=0)
+            targets = targets.view(-1, 1)
+            outputs_sum += outputs.sum().item()
+            targets_sum += targets.sum().item()
+        
+        error_rate = (outputs_sum - targets_sum) * 100 / (targets_sum + 1e-8)
+        if error_rate < 0:
+            error_rate = -error_rate
+        error_rates.append(error_rate)
+        
+        print(f"Seed {seed} - Validation: Outputs sum = {outputs_sum}, Targets sum = {targets_sum}, Error rate = {error_rate:.4f}")
+        return error_rate
+
+    for epoch in range(1, 1000):
+        print(f"Seed {seed} - Epoch {epoch}: Training {model_name}...")
+        for batch in train_dataset:
+            inputs, targets = batch
+            outputs = model(inputs)
+            targets = targets.view(-1, 1)
             loss = criterion(outputs, targets)
-            total_loss += loss.item()
-    avg_loss = total_loss / len(dataloaders['val'])
-    eval_outputs = (sum_outputs - sum_targets) / sum_targets
-    curve_1.append(avg_loss)
-    curve_2.append(eval_outputs[2].cpu().item())
-    curve_3.append(eval_outputs[4].cpu().item())
-    curve_4.append(eval_outputs[6].cpu().item())
-    # print(f"Validation Loss: {avg_loss:.4f} | {eval_outputs}")
-
-def train():
-    model.train()
-    total_loss = 0.0
-    for batch in dataloaders['train']:
-        inputs, targets = batch
-        optimizer.zero_grad()
-        outputs = model(inputs)
-        outputs = outputs.reshape(-1, 12)
-        loss = criterion(outputs, targets)
-        loss.backward()
-        optimizer.step()
-        total_loss += loss.item()
-    avg_loss = total_loss / len(dataloaders['train'])
-    # print(f"Training Loss: {avg_loss:.4f}")
-
-if __name__ == "__main__":
-    num_epochs = 3000
-    for epoch in tqdm(range(num_epochs)):
-        train()
-        eval()
+            optimizer.zero_grad()
+            loss.backward()
+            optimizer.step()
+        validate()
     
-    # Save the model
-    torch.save(model.state_dict(), "masked_linear_model.pth")
-    print("Model saved as masked_linear_model.pth")
+    return error_rates
 
-    curve_1 = gaussian_filter1d(np.array(curve_1), sigma=3).tolist()
-    curve_2 = gaussian_filter1d(np.array(curve_2), sigma=3).tolist()
-    curve_3 = gaussian_filter1d(np.array(curve_3), sigma=3).tolist()
-    curve_4 = gaussian_filter1d(np.array(curve_4), sigma=3).tolist()
-
-
-    import matplotlib.pyplot as plt
-
-    plt.figure(figsize=(10, 6))
-    plt.plot(curve_1, label='Validation Loss')
-    # plt.plot(curve_2, label='March')
-    # plt.plot(curve_3, label='May')
-    # plt.plot(curve_4, label='July')
-    plt.xlabel('Epoch')
-    plt.ylabel('Value')
-    plt.title('Training Curves')
-    plt.legend()
-    plt.grid(True)
-    plt.tight_layout()
-    plt.show()
-    plt.close()
-
+def train(path, num):
+    num_seeds = 10
+    all_error_rates = []
     
-    plt.figure(figsize=(10, 10))
-    # plt.plot(curve_1, label='Validation Loss')
-    plt.plot(curve_2, label='March')
-    plt.plot(curve_3, label='May')
-    plt.plot(curve_4, label='July')
-    plt.axhline(y=0.05, color='r', linestyle='--', label='target Line')
-    plt.axhline(y=-0.05, color='r', linestyle='--', label='target Line')
-    plt.ylim(-0.5, 0.5)
+    # Train with 10 different seeds
+    for seed in range(1, num_seeds + 1):
+        error_rates = train_single_run(path, num, seed)
+        all_error_rates.append(error_rates)
+    
+    max_len = max(len(rates) for rates in all_error_rates)
+    
+    padded_rates = []
+    for rates in all_error_rates:
+        if len(rates) < max_len:
+            padded = rates + [rates[-1]] * (max_len - len(rates))
+        else:
+            padded = rates
+        padded_rates.append(padded)
+    
+    error_rates_array = np.array(padded_rates)
+    
+    mean_error = np.mean(error_rates_array, axis=0)
+    std_error = np.std(error_rates_array, axis=0)
+    upper_bound = mean_error + std_error
+    lower_bound = mean_error - std_error
+    # upper_bound = np.percentile(error_rates_array, 100, axis=0)
+    # lower_bound = np.percentile(error_rates_array, 0, axis=0)
+    
+    epochs = np.arange(1, max_len + 1)
+    
+    plt.figure(figsize=(12, 8))
+    
+    # for i, rates in enumerate(padded_rates):
+    #     plt.plot(epochs, rates, alpha=0.2, linewidth=1, label=f'Seed {i+1}' if i == 0 else None)
+    
+    smoothed_mean = gaussian_filter1d(mean_error, sigma=3)
+    plt.plot(epochs, smoothed_mean, 'b-', linewidth=2, label='Mean (Smoothed)')
+    
+    plt.plot(epochs, mean_error, 'r-', linewidth=1, alpha=0.7, label='Mean')
+    
+    plt.fill_between(epochs, lower_bound, upper_bound, color='blue', alpha=0.2, label='±1 Std Dev')
+    
+    plt.title(f'Error Rate Curve for Model MLP_{num} (10 Seeds)')
     plt.xlabel('Epoch')
-    plt.ylabel('Value')
-    plt.title('Training Curves')
-    plt.legend()
+    plt.ylabel('Error Rate (%)')
     plt.grid(True)
-    plt.tight_layout()
-    plt.show()
+    plt.legend()
+
+    ylim = np.percentile(np.abs(mean_error), 90) * 2
+    plt.ylim(0, ylim)
+    
+    plt.savefig(f'error_rate_curve_MLP_{num}_10seeds.png')
     plt.close()
+    
+    print(f"Error rate curve saved as error_rate_curve_MLP_{num}_10seeds.png")
+    
+    return mean_error[-1]
+

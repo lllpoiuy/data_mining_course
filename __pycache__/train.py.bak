@@ -1,0 +1,86 @@
+import argparse
+from utils.dataset import train_get_dataloader
+from models.MLP import MLP
+import torch
+import numpy as np
+from scipy.ndimage import gaussian_filter1d
+import matplotlib.pyplot as plt
+
+def train(path, num):
+    model_name = "MLP_" + str(num)
+    print(f"Training model: {model_name} with data from {path}")
+
+    # train_dataset, eval_dataset, shape = train_get_dataloader(path, num, use_region=False, use_site=False, use_category=False, batch_size=64)
+    train_dataset, eval_dataset, shape = train_get_dataloader(path, num, use_region=True, use_site=True, use_category=True, batch_size=128)
+
+    model = MLP(input_dim=shape, hidden_dim=15, output_dim=1)
+    # criterion = torch.nn.MSELoss()
+    # optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
+    criterion = torch.nn.L1Loss()
+    optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
+    # optimizer = torch.optim.SGD(model.parameters(), lr=0.000001)
+
+    error_rates = []
+
+    def validate():
+        outputs_sum = 0
+        targets_sum = 0
+        for batch in eval_dataset:
+            inputs, targets = batch
+            outputs = model(inputs)
+            # Reshape targets to match outputs
+            targets = targets.view(-1, 1)
+            outputs_sum += outputs.sum().item()
+            targets_sum += targets.sum().item()
+        
+        error_rate = (outputs_sum - targets_sum) * 100 / (targets_sum + 1e-8)
+        error_rates.append(error_rate)
+        
+        print(f"Validation: Outputs sum = {outputs_sum}, Targets sum = {targets_sum}, Error rate = {error_rate:.4f}")
+        return error_rate
+
+    for epoch in range(1, 1000):
+        print(f"Epoch {epoch}: Training {model_name}...")
+        for batch in train_dataset:
+            inputs, targets = batch
+            outputs = model(inputs)
+            targets = targets.view(-1, 1)
+            loss = criterion(outputs, targets)
+            optimizer.zero_grad()
+            loss.backward()
+            optimizer.step()
+        validate()
+    
+    error_rates_np = np.array(error_rates)
+    epochs = np.arange(1, len(error_rates_np) + 1)
+
+    # Gaussian smoothed curve
+    smoothed = gaussian_filter1d(error_rates_np, sigma=3)
+
+    # Rolling std (window=7)
+    window = 7
+    std_curve = np.array([
+        error_rates_np[max(0, i - window // 2):min(len(error_rates_np), i + window // 2 + 1)].std()
+        for i in range(len(error_rates_np))
+    ])
+
+    plt.figure(figsize=(10, 6))
+    plt.plot(epochs, error_rates_np, label='Error Rate', alpha=0.4)
+    plt.plot(epochs, smoothed, label='Gaussian Smoothed', linewidth=2)
+    plt.plot(epochs, std_curve, label='Rolling Std', linestyle='--')
+    plt.title(f'Error Rate Curve for Model {model_name}')
+    plt.xlabel('Epoch')
+    plt.ylabel('Error Rate (%)')
+    ylim = 2 * torch.quantile(torch.abs(torch.tensor(error_rates)), 0.9).item()
+    plt.ylim(-ylim, ylim)
+    plt.grid(True)
+    plt.legend()
+
+    plt.savefig(f'error_rate_curve_{model_name}.png')
+    plt.close()
+
+    print(f"Error rate curve saved as error_rate_curve_{model_name}.png")
+    
+    # Return the final error rate
+    return error_rates[-1]
+
